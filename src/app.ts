@@ -43,7 +43,7 @@ app.post('/api/v1/upload', upload.array('images', 20), async (req: Request, res:
 
         const uploadPromises: Promise<string>[] = files.map(async file => {
             const filePath = file.path;
-            const result = await cloudinary.uploader.upload(filePath, { folder: 'uploads' });
+            const result = await cloudinary.uploader.upload(filePath, { folder: 'avion' });
             // Delete the file from the server after uploading to Cloudinary
             fs.unlink(filePath, (err) => {
                 if (err) {
