@@ -1,15 +1,15 @@
 import { NextFunction } from "express";
 import { v2 as cloudinary } from 'cloudinary';
+import config from "./config";
 
 export async function single(next: NextFunction) {
 
     try {
-
         // Configuration
         cloudinary.config({
-            cloud_name: 'df0vb0ybh',
-            api_key: '525698588522263',
-            api_secret: '<your_api_secret>' // Click 'View Credentials' below to copy your API secret
+            cloud_name: config.cloudinary_cloud_name,
+            api_key: config.cloudinary_api_key,
+            api_secret: config.cloudinary_api_secret
         });
 
         // Upload an image
