@@ -1,32 +1,33 @@
-import express, { Request, Response } from 'express';
-import multer, { Multer } from 'multer';
-import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs';
-import path from 'path';
-import config from './config';
-const app = express();
-
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const multer_1 = __importDefault(require("multer"));
+const cloudinary_1 = require("cloudinary");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const config_1 = __importDefault(require("./config"));
+const app = (0, express_1.default)();
 // Configure Cloudinary
-cloudinary.config({
-    cloud_name: config.cloudinary_cloud_name,
-    api_key: config.cloudinary_api_key,
-    api_secret: config.cloudinary_api_secret
+cloudinary_1.v2.config({
+    cloud_name: config_1.default.cloudinary_cloud_name,
+    api_key: config_1.default.cloudinary_api_key,
+    api_secret: config_1.default.cloudinary_api_secret
 });
-
 // Set up Multer for file uploads
-const storage: multer.StorageEngine = multer.diskStorage({
+const storage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'uploads/');
     },
     filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
+        cb(null, Date.now() + path_1.default.extname(file.originalname));
     },
 });
-
-const upload: Multer = multer({ storage });
-
+const upload = (0, multer_1.default)({ storage });
 // test endpoint
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (req, res) => {
     res.status(200).json({
         success: true,
         systemHealth: 'Everything is alright',
@@ -35,54 +36,47 @@ app.get('/', (req: Request, res: Response) => {
         base: '/api/v1/'
     });
 });
-
 // Route to upload single or multiple images
-app.post('/api/v1/upload', upload.array('images', 20), async (req: Request, res: Response) => {
+app.post('/api/v1/upload', upload.array('images', 10), async (req, res) => {
     try {
-        const files = req.files as Express.Multer.File[];
-
-        const uploadPromises: Promise<string>[] = files.map(async file => {
+        const files = req.files;
+        const uploadPromises = files.map(async (file) => {
             const filePath = file.path;
-            const result = await cloudinary.uploader.upload(filePath, { folder: 'uploads' });
+            const result = await cloudinary_1.v2.uploader.upload(filePath, { folder: 'uploads' });
             // Delete the file from the server after uploading to Cloudinary
-            fs.unlink(filePath, (err) => {
+            fs_1.default.unlink(filePath, (err) => {
                 if (err) {
                     console.error('Failed to delete local file:', err);
                 }
             });
             return result.secure_url;
         });
-
         // Wait for all files to be uploaded
-        const urls: string[] = await Promise.all(uploadPromises);
-
+        const urls = await Promise.all(uploadPromises);
         // Send the URLs of the uploaded images back to the client
         res.status(200).json({
             message: 'Images uploaded successfully',
             urls: urls,
         });
-    } catch (error) {
+    }
+    catch (error) {
         console.error('Error uploading images:', error);
         res.status(500).send('Server Error');
     }
 });
-
 // not found endpoint
-app.all('*', (req: Request, res: Response) => {
+app.all('*', (req, res) => {
     res.status(404).send('not found');
 });
-
 // global error handler
-app.use((err: any, req: Request, res: Response) => {
+app.use((err, req, res) => {
     const message = err.message || 'Something Wrong';
-
     return res.status(500).json({
         success: false,
         message,
         err
     });
 });
-
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
