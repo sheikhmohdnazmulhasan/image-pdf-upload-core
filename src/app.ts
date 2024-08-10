@@ -7,7 +7,6 @@ import path from 'path';
 import config from './config';
 const app = express();
 
-
 app.use(cors());
 
 // Configure Cloudinary
@@ -17,8 +16,8 @@ cloudinary.config({
     api_secret: config.cloudinary_api_secret
 });
 
-// Set up Multer for file uploads
-const storage: multer.StorageEngine = multer.diskStorage({
+// Set up Multer for images uploads
+const imgStorage: multer.StorageEngine = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'uploads/');
     },
@@ -27,22 +26,41 @@ const storage: multer.StorageEngine = multer.diskStorage({
     },
 });
 
-const upload: Multer = multer({ storage });
+// Set up Multer for pdf uploads
+const pdfStorage: multer.StorageEngine = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    },
+});
+
+// const pdfFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+//     if (file.mimetype === 'application/pdf') {
+//         cb(null, true);
+//     } else {
+//         cb(new Error('Only PDFs are allowed!'), false);
+//     }
+// };
+
+const imgUpload: Multer = multer({ storage: imgStorage });
+const pdfUpload: Multer = multer({ storage: pdfStorage });
 
 // test endpoint
 app.get('/', (req: Request, res: Response) => {
     res.status(200).json({
         success: true,
         systemHealth: 'Everything is alright',
-        message: 'Server is ready for hosting images',
-        instruction: 'Send a POST request with a multipart/form-data body. Use the field name images for the file upload. upload single or multiple images. The API will return a JSON response containing a message and an array of urls',
-        base: '/api/v1/'
+        base: '/api/v1/upload/',
+        images: '/image',
+        pdf: '/pdf'
     });
 });
 
 
 // Route to upload single or multiple images
-app.post('/api/v1/upload', upload.array('images', 20), async (req: Request, res: Response) => {
+app.post('/api/v1/upload/image', imgUpload.array('images', 20), async (req: Request, res: Response) => {
     try {
         const files = req.files as Express.Multer.File[];
 
@@ -72,6 +90,40 @@ app.post('/api/v1/upload', upload.array('images', 20), async (req: Request, res:
         res.status(500).send('Server Error');
     }
 });
+
+// Route to upload single or multiple pdf
+app.post('/api/v1/upload/pdf', pdfUpload.array('pdfs', 10), async (req: Request, res: Response) => {
+    try {
+        const files = req.files as Express.Multer.File[];
+
+        const uploadPromises: Promise<string>[] = files?.map(async file => {
+            const filePath = file.path;
+            const result = await cloudinary.uploader.upload(filePath, {
+                folder: 'avion/pdf',
+                resource_type: 'raw'
+            });
+            fs.unlink(filePath, (err) => {
+                if (err) {
+                    console.error('Failed to delete local file:', err);
+                }
+            });
+            return result.secure_url;
+        });
+
+        const urls: string[] = await Promise.all(uploadPromises);
+
+        res.status(200).json({
+            success: true,
+            message: 'PDFs uploaded successfully',
+            urls: urls,
+        });
+
+    } catch (error) {
+        console.error('Error uploading PDFs:', error);
+        res.status(500).send('Server Error');
+    }
+});
+
 
 // not found endpoint
 app.all('*', (req: Request, res: Response) => {
