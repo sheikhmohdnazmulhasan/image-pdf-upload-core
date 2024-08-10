@@ -1,10 +1,14 @@
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import multer, { Multer } from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
 import config from './config';
 const app = express();
+
+
+app.use(cors());
 
 // Configure Cloudinary
 cloudinary.config({
@@ -36,12 +40,13 @@ app.get('/', (req: Request, res: Response) => {
     });
 });
 
+
 // Route to upload single or multiple images
 app.post('/api/v1/upload', upload.array('images', 20), async (req: Request, res: Response) => {
     try {
         const files = req.files as Express.Multer.File[];
 
-        const uploadPromises: Promise<string>[] = files.map(async file => {
+        const uploadPromises: Promise<string>[] = files?.map(async file => {
             const filePath = file.path;
             const result = await cloudinary.uploader.upload(filePath, { folder: 'avion' });
             // Delete the file from the server after uploading to Cloudinary
@@ -58,6 +63,7 @@ app.post('/api/v1/upload', upload.array('images', 20), async (req: Request, res:
 
         // Send the URLs of the uploaded images back to the client
         res.status(200).json({
+            success: true,
             message: 'Images uploaded successfully',
             urls: urls,
         });
