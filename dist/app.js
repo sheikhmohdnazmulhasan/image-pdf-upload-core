@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
 app.post('/api/v1/upload/image', imgUpload.array('images', 20), async (req, res) => {
     try {
         const files = req.files;
-        const uploadPromises = files?.map(async (file) => {
+        const uploadPromises = files.map(async (file) => {
             const filePath = file.path;
             const result = await cloudinary_1.v2.uploader.upload(filePath, { folder: 'avion' });
             // Delete the file from the server after uploading to Cloudinary
@@ -88,7 +88,7 @@ app.post('/api/v1/upload/image', imgUpload.array('images', 20), async (req, res)
 app.post('/api/v1/upload/pdf', pdfUpload.array('pdfs', 10), async (req, res) => {
     try {
         const files = req.files;
-        const uploadPromises = files?.map(async (file) => {
+        const uploadPromises = files.map(async (file) => {
             const filePath = file.path;
             const result = await cloudinary_1.v2.uploader.upload(filePath, {
                 folder: 'avion/pdf',

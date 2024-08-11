@@ -64,7 +64,7 @@ app.post('/api/v1/upload/image', imgUpload.array('images', 20), async (req: Requ
     try {
         const files = req.files as Express.Multer.File[];
 
-        const uploadPromises: Promise<string>[] = files?.map(async file => {
+        const uploadPromises: Promise<string>[] = files.map(async file => {
             const filePath = file.path;
             const result = await cloudinary.uploader.upload(filePath, { folder: 'avion' });
             // Delete the file from the server after uploading to Cloudinary
@@ -96,7 +96,7 @@ app.post('/api/v1/upload/pdf', pdfUpload.array('pdfs', 10), async (req: Request,
     try {
         const files = req.files as Express.Multer.File[];
 
-        const uploadPromises: Promise<string>[] = files?.map(async file => {
+        const uploadPromises: Promise<string>[] = files.map(async file => {
             const filePath = file.path;
             const result = await cloudinary.uploader.upload(filePath, {
                 folder: 'avion/pdf',
