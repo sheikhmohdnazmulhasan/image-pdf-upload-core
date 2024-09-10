@@ -7,7 +7,9 @@ import path from 'path';
 import config from './config';
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'https://www.avionrealty.ae']
+}));
 
 // Configure Cloudinary
 cloudinary.config({
