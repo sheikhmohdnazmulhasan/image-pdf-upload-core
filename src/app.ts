@@ -2,13 +2,18 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import multer, { Multer } from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs';
-import path from 'path';
 import config from './config';
+import streamifier from 'streamifier';
+
 const app = express();
 
+// CORS Configuration
 app.use(cors({
-    origin: "*"
+    origin: [
+        'http://localhost:3000',
+        'https://avionrealty.ae',
+        'https://www.avionrealty.ae'
+    ]
 }));
 
 // Configure Cloudinary
@@ -18,38 +23,11 @@ cloudinary.config({
     api_secret: config.cloudinary_api_secret
 });
 
-// Set up Multer for images uploads
-const imgStorage: multer.StorageEngine = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    },
-});
+// Set up Multer for handling in-memory file uploads
+const imgUpload: Multer = multer({ storage: multer.memoryStorage() });
+const pdfUpload: Multer = multer({ storage: multer.memoryStorage() });
 
-// Set up Multer for pdf uploads
-const pdfStorage: multer.StorageEngine = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    },
-});
-
-// const pdfFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-//     if (file.mimetype === 'application/pdf') {
-//         cb(null, true);
-//     } else {
-//         cb(new Error('Only PDFs are allowed!'), false);
-//     }
-// };
-
-const imgUpload: Multer = multer({ storage: imgStorage });
-const pdfUpload: Multer = multer({ storage: pdfStorage });
-
-// test endpoint
+// Test endpoint
 app.get('/', (req: Request, res: Response) => {
     res.status(200).json({
         success: true,
@@ -60,32 +38,42 @@ app.get('/', (req: Request, res: Response) => {
     });
 });
 
+const uploadToCloudinary = (buffer: Buffer, folder: string, resourceType: "image" | "video" | "raw" | "auto") => {
+    return new Promise<string>((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+            { folder, resource_type: resourceType }, // Ensure resourceType is one of the allowed values
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result?.secure_url || '');
+            }
+        );
+        streamifier.createReadStream(buffer).pipe(uploadStream); // Use buffer to create a readable stream
+    });
+};
+
 
 // Route to upload single or multiple images
 app.post('/api/v1/upload/image', imgUpload.array('images', 20), async (req: Request, res: Response) => {
     try {
         const files = req.files as Express.Multer.File[];
 
-        const uploadPromises: Promise<string>[] = files.map(async file => {
-            const filePath = file.path;
-            const result = await cloudinary.uploader.upload(filePath, { folder: 'avion' });
-            // Delete the file from the server after uploading to Cloudinary
-            fs.unlink(filePath, (err) => {
-                if (err) {
-                    console.error('Failed to delete local file:', err);
-                }
+        if (!files || files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No files uploaded',
             });
-            return result.secure_url;
+        }
+
+        const uploadPromises = files.map(file => {
+            return uploadToCloudinary(file.buffer, 'avion', 'image'); // Pass 'image' as resourceType
         });
 
-        // Wait for all files to be uploaded
         const urls: string[] = await Promise.all(uploadPromises);
 
-        // Send the URLs of the uploaded images back to the client
         res.status(200).json({
             success: true,
             message: 'Images uploaded successfully',
-            urls: urls,
+            urls,
         });
     } catch (error) {
         console.error('Error uploading images:', error);
@@ -93,23 +81,21 @@ app.post('/api/v1/upload/image', imgUpload.array('images', 20), async (req: Requ
     }
 });
 
-// Route to upload single or multiple pdf
+
+// Route to upload single or multiple PDFs
 app.post('/api/v1/upload/pdf', pdfUpload.array('pdfs', 10), async (req: Request, res: Response) => {
     try {
         const files = req.files as Express.Multer.File[];
 
-        const uploadPromises: Promise<string>[] = files.map(async file => {
-            const filePath = file.path;
-            const result = await cloudinary.uploader.upload(filePath, {
-                folder: 'avion/pdf',
-                resource_type: 'raw'
+        if (!files || files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No files received',
             });
-            fs.unlink(filePath, (err) => {
-                if (err) {
-                    console.error('Failed to delete local file:', err);
-                }
-            });
-            return result.secure_url;
+        }
+
+        const uploadPromises: Promise<string>[] = files.map(async (file) => {
+            return await uploadToCloudinary(file.buffer, 'avion/pdf', 'raw');
         });
 
         const urls: string[] = await Promise.all(uploadPromises);
@@ -117,7 +103,7 @@ app.post('/api/v1/upload/pdf', pdfUpload.array('pdfs', 10), async (req: Request,
         res.status(200).json({
             success: true,
             message: 'PDFs uploaded successfully',
-            urls: urls,
+            urls,
         });
 
     } catch (error) {
@@ -126,17 +112,15 @@ app.post('/api/v1/upload/pdf', pdfUpload.array('pdfs', 10), async (req: Request,
     }
 });
 
-
-// not found endpoint
+// Not found endpoint
 app.all('*', (req: Request, res: Response) => {
-    res.status(404).send('not found');
+    res.status(404).send('Not found');
 });
 
-// global error handler
-app.use((err: any, req: Request, res: Response) => {
-    const message = err.message || 'Something Wrong';
-
-    return res.status(500).json({
+// Global error handler
+app.use((err: any, req: Request, res: Response, next: Function) => {
+    const message = err.message || 'Something went wrong';
+    res.status(500).json({
         success: false,
         message,
         err
