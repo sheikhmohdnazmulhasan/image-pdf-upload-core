@@ -4,15 +4,18 @@ import multer, { Multer } from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import config from "./config";
 import streamifier from "streamifier";
+import { Server } from "http";
+let server: Server;
+const PORT = process.env.PORT || 5000;
 
 const app = express();
 
 // CORS Configuration
 app.use(
   cors({
-    origin: [
-      //
-    ],
+    origin: "*", // Allow any origin
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
   })
 );
 
@@ -31,10 +34,56 @@ const pdfUpload: Multer = multer({ storage: multer.memoryStorage() });
 app.get("/", (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
-    systemHealth: "Everything is alright",
-    base: "/api/v1/upload/",
-    images: "/image",
-    pdf: "/pdf",
+    name: "image-pdf-upload-core",
+    version: "1.0.0",
+    description:
+      "A robust API for securely uploading images and PDFs to Cloudinary",
+    system_health: "Operational",
+    base_url: "/api/v1/upload",
+    endpoints: [
+      {
+        path: "/image",
+        method: "POST",
+        description: "Upload single or multiple images (max 20)",
+        contentType: "multipart/form-data",
+        formField: "images",
+        maxFileSize: "10MB per file",
+        allowedFormats: ["jpg", "jpeg", "png", "gif"],
+      },
+      {
+        path: "/pdf",
+        method: "POST",
+        description: "Upload single or multiple PDFs (max 10)",
+        contentType: "multipart/form-data",
+        formField: "pdfs",
+        maxFileSize: "20MB per file",
+        allowedFormats: ["pdf"],
+      },
+    ],
+    rateLimits: {
+      requests: 100,
+      per: "15 minutes",
+    },
+    documentation:
+      "https://github.com/sheikhmohdnazmulhasan/image-pdf-upload-core#readme",
+    maintainer: "nazmulofficial@outlook.com",
+    exampleUsage: {
+      curl: `curl -X POST -H "Content-Type: multipart/form-data" -F "images=@/path/to/image.jpg" ${
+        req.protocol
+      }://${req.get("host")}/api/v1/upload/image`,
+      javascript: `
+const formData = new FormData();
+formData.append('images', imageFile);
+
+fetch('${req.protocol}://${req.get("host")}/api/v1/upload/image', {
+  method: 'POST',
+  body: formData
+})
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('Error:', error));
+      `,
+    },
   });
 });
 
@@ -136,8 +185,25 @@ app.use((err: any, req: Request, res: Response, next: Function) => {
   });
 });
 
-// Start the server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+// async error handle
+process.on("unhandledRejection", () => {
+  console.log("UnhandledRejection is detected! shutting down the server...");
+
+  if (server) {
+    server.close(() => {
+      process.exit(1);
+    });
+  }
+
+  process.exit(1);
+});
+
+// synchronies error handle
+process.on("uncaughtException", () => {
+  console.log("UncaughtException is detected! shutting down the server...");
+  process.exit();
 });
